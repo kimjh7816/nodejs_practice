@@ -1,0 +1,25 @@
+{
+  "name": "nodejs_practice",
+  "version": "1.0.0",
+  "description": "Node.js 공부 기록",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "test": "node --test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kimjh7816/nodejs_practice.git"
+  },
+  "keywords": [
+    "nodejs",
+    "study"
+  ],
+  "author": "kimjh7816",
+  "license": "ISC",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=24"
+  }
+}
