@@ -1,11 +1,13 @@
 {
   "name": "nodejs_practice",
+  "type": "module",
   "version": "1.0.0",
   "description": "Node.js 공부 기록",
-  "main": "index.js",
+  "main": "src/index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "node --watch index.js",
+    "start": "node src/index.js",
+    "dev": "nodemon --exec node src/index.js",
+    "db:check": "node src/scripts/check-db.js",
     "test": "node --test"
   },
   "repository": {
@@ -18,8 +20,17 @@
   ],
   "author": "kimjh7816",
   "license": "ISC",
-  "type": "commonjs",
   "engines": {
     "node": ">=24"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "http-status-codes": "^2.3.0",
+    "mysql2": "^3.24.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
   }
 }

@@ -15,3 +15,10 @@ npm-debug.log*
 .DS_Store
 .vscode/
 .idea/
+
+# dependency directories
+node_modules/
+
+# dotenv environment variable files
+.env
+.env.*
