@@ -1,14 +1,21 @@
 import { prisma } from "../db.config.js";
-import { responseFromReview } from "../dtos/review.dto.js";
+import {
+  responseFromMyReviews,
+  responseFromReview,
+  responseFromReviews,
+} from "../dtos/review.dto.js";
 import { NotFoundError } from "../errors.js";
 import {
   applyReviewToStore,
   findReviewById,
   findReviewImagesByReviewId,
+  getAllStoreReviews,
+  getAllUserReviews,
   insertReview,
   insertReviewImage,
 } from "../repositories/review.repository.js";
 import { findStoreById } from "../repositories/store.repository.js";
+import { PAGE_FETCH_SIZE } from "../utils/pagination.js";
 import { resolveCurrentUserId } from "./user.service.js";
 
 export const addReview = async (data) => {
@@ -36,4 +43,21 @@ export const addReview = async (data) => {
   const images = await findReviewImagesByReviewId(reviewId);
 
   return responseFromReview({ review, images });
+};
+
+export const listStoreReviews = async (storeId, cursor) => {
+  const store = await findStoreById(storeId);
+  if (!store) {
+    throw new NotFoundError("존재하지 않는 가게입니다.");
+  }
+
+  const reviews = await getAllStoreReviews(storeId, cursor, PAGE_FETCH_SIZE);
+  return responseFromReviews(reviews);
+};
+
+export const listMyReviews = async (requestUserId, cursor) => {
+  const userId = await resolveCurrentUserId(requestUserId);
+
+  const reviews = await getAllUserReviews(userId, cursor, PAGE_FETCH_SIZE);
+  return responseFromMyReviews(reviews);
 };

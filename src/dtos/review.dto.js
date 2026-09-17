@@ -1,4 +1,5 @@
 import { BadRequestError } from "../errors.js";
+import { toCursorPage } from "../utils/pagination.js";
 import { optionalString, parseId, requireString } from "../utils/validation.js";
 
 export const bodyToReview = (body, storeId) => {
@@ -27,3 +28,26 @@ export const responseFromReview = ({ review, images }) => ({
   review_image_urls: images.map((image) => image.image_url),
   created_at: review.created_at,
 });
+
+// 가게 리뷰 목록 응답
+export const responseFromReviews = (reviews) =>
+  toCursorPage(reviews, (review) => ({
+    review_id: review.id,
+    nickname: review.users.nickname,
+    rating: review.rating,
+    review_content: review.content,
+    created_at: review.created_at,
+  }));
+
+// 내가 작성한 리뷰 목록 응답
+export const responseFromMyReviews = (reviews) =>
+  toCursorPage(reviews, (review) => ({
+    review_id: review.id,
+    store_id: review.store_id,
+    store_name: review.stores.name,
+    nickname: review.users.nickname,
+    rating: review.rating,
+    review_content: review.content,
+    review_image_urls: review.review_images.map((image) => image.image_url),
+    created_at: review.created_at,
+  }));

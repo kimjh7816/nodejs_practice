@@ -5,13 +5,22 @@ import { StatusCodes } from "http-status-codes";
 
 import "./utils/bigint.js"; // Prisma가 돌려주는 BigInt id를 JSON으로 내보낼 수 있게 한다
 import { disconnect, testConnection } from "./db.config.js";
-import { handleUserSignUp } from "./controllers/user.controller.js";
+import {
+  handleListMyReviews,
+  handleUserSignUp,
+} from "./controllers/user.controller.js";
 import {
   handleAddMission,
   handleAddReview,
   handleAddStore,
+  handleListStoreMissions,
+  handleListStoreReviews,
 } from "./controllers/store.controller.js";
-import { handleChallengeMission } from "./controllers/mission.controller.js";
+import {
+  handleChallengeMission,
+  handleCompleteMission,
+  handleListMyMissions,
+} from "./controllers/mission.controller.js";
 import {
   createUser,
   findAllUsers,
@@ -38,6 +47,16 @@ app.post("/api/v1/regions/:regionId/stores", handleAddStore); // 특정 지역�
 app.post("/api/v1/reviews/:storeId", handleAddReview); // 가게에 리뷰 추가 (끝에 / 가 붙어도 매칭됨)
 app.post("/api/v1/stores/:storeId/missions", handleAddMission); // 가게에 미션 추가
 app.post("/api/v1/missions/:missionId/challenge", handleChallengeMission); // 미션 도전하기
+app.get("/api/v1/stores/:storeId/reviews", handleListStoreReviews); // 가게 리뷰 목록 조회
+app.get("/api/v1/stores/:storeId/missions", handleListStoreMissions); // 가게 미션 목록 조회
+
+// 로그인 기능이 생기면 "me"는 로그인한 사용자가 된다. 지금은 user_id(없으면 첫 번째 사용자)로 대신한다.
+app.get("/api/v1/users/me/reviews", handleListMyReviews); // 내가 작성한 리뷰 목록
+app.get("/api/v1/users/me/missions", handleListMyMissions); // 내가 진행 중인 미션 목록
+app.patch(
+  "/api/v1/users/me/missions/:userMissionId/complete",
+  handleCompleteMission
+); // 진행 중인 미션을 진행 완료로 바꾸기
 
 // DB가 살아있는지 확인하는 헬스 체크
 app.get("/health/db", async (req, res) => {

@@ -1,18 +1,31 @@
 import { prisma } from "../db.config.js";
 import {
+  responseFromCompletedUserMission,
   responseFromMission,
+  responseFromMyMissions,
+  responseFromStoreMissions,
   responseFromUserMission,
 } from "../dtos/mission.dto.js";
 import { BadRequestError, ConflictError, NotFoundError } from "../errors.js";
 import {
+  ACTIVE_USER_MISSION_STATUSES,
+  completeUserMission,
   existsActiveUserMission,
   findMissionById,
   findUserMissionById,
+  getAllActiveUserMissions,
+  getAllStoreMissions,
   increaseMissionIssuedCount,
   insertMission,
   insertUserMission,
 } from "../repositories/mission.repository.js";
 import { findStoreById } from "../repositories/store.repository.js";
+import {
+  increaseRegionSuccessCount,
+  increaseUserPoint,
+  insertPointTransaction,
+} from "../repositories/user.repository.js";
+import { PAGE_FETCH_SIZE } from "../utils/pagination.js";
 import { resolveCurrentUserId } from "./user.service.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -91,4 +104,79 @@ export const challengeMission = async (data) => {
 
   const userMission = await findUserMissionById(userMissionId);
   return responseFromUserMission(userMission);
+};
+
+export const listStoreMissions = async (storeId, cursor) => {
+  const store = await findStoreById(storeId);
+  if (!store) {
+    throw new NotFoundError("존재하지 않는 가게입니다.");
+  }
+
+  const missions = await getAllStoreMissions(storeId, cursor, PAGE_FETCH_SIZE);
+  return responseFromStoreMissions(missions);
+};
+
+export const listMyMissions = async (requestUserId, cursor) => {
+  const userId = await resolveCurrentUserId(requestUserId);
+
+  const userMissions = await getAllActiveUserMissions(userId, cursor, PAGE_FETCH_SIZE);
+  return responseFromMyMissions(userMissions);
+};
+
+// POINT 미션은 정해진 포인트를, RATE 미션은 결제 금액의 reward_rate(%)만큼을 지급한다. (소수점 이하는 버림)
+const calculateEarnedPoint = (userMission, paidAmount) => {
+  if (userMission.reward_type === "POINT") {
+    return userMission.reward_point ?? 0;
+  }
+
+  if (paidAmount === undefined) {
+    throw new BadRequestError("결제 금액 비율로 보상하는 미션은 paid_amount가 필요합니다.");
+  }
+  return Math.floor((paidAmount * Number(userMission.reward_rate)) / 100);
+};
+
+export const completeMission = async (data) => {
+  const userId = await resolveCurrentUserId(data.userId);
+
+  const pointBalance = await prisma.$transaction(async (tx) => {
+    // 같은 미션에 완료 요청이 동시에 들어와도 포인트가 두 번 지급되지 않도록 row를 잠근다.
+    const userMission = await findUserMissionById(data.userMissionId, {
+      tx,
+      forUpdate: true,
+    });
+    // 다른 사용자의 미션은 존재 여부도 알려주지 않는다.
+    // (DB의 id는 BigInt, 요청으로 받은 id는 number일 수 있어서 BigInt로 맞춰 비교한다)
+    if (!userMission || userMission.user_id !== BigInt(userId)) {
+      throw new NotFoundError("존재하지 않는 미션입니다.");
+    }
+    if (!ACTIVE_USER_MISSION_STATUSES.includes(userMission.status)) {
+      throw new ConflictError("진행 중인 미션이 아닙니다.");
+    }
+    if (userMission.expires_at <= new Date()) {
+      throw new BadRequestError("도전 기한이 지난 미션입니다.");
+    }
+
+    const earnedPoint = calculateEarnedPoint(userMission, data.paidAmount);
+
+    await completeUserMission(tx, userMission.id, {
+      earnedPoint,
+      paidAmount: data.paidAmount,
+    });
+    const balanceAfter = await increaseUserPoint(tx, userId, earnedPoint);
+    await insertPointTransaction(tx, {
+      userId,
+      amount: earnedPoint,
+      balanceAfter,
+      type: "MISSION_REWARD",
+      sourceType: "USER_MISSION",
+      sourceId: userMission.id,
+      description: `${userMission.store_name} 미션 성공`,
+    });
+    await increaseRegionSuccessCount(tx, userId, userMission.region_id);
+
+    return balanceAfter;
+  });
+
+  const userMission = await findUserMissionById(data.userMissionId);
+  return responseFromCompletedUserMission(userMission, pointBalance);
 };

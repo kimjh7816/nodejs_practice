@@ -1,5 +1,12 @@
 import { BadRequestError } from "../errors.js";
-import { optionalString, parseId, requireString } from "../utils/validation.js";
+import { toCursorPage } from "../utils/pagination.js";
+import {
+  optionalId,
+  optionalString,
+  parseId,
+  parsePositiveInt,
+  requireString,
+} from "../utils/validation.js";
 
 export const bodyToMission = (body, storeId) => {
   const rewardPoint = Number(body.reward_point);
@@ -58,4 +65,53 @@ export const responseFromUserMission = (userMission) => ({
   status: userMission.status,
   started_at: userMission.started_at,
   due_date: userMission.expires_at,
+});
+
+// 가게의 미션 목록 응답
+export const responseFromStoreMissions = (missions) =>
+  toCursorPage(missions, (mission) => ({
+    mission_id: mission.id,
+    mission_name: mission.title,
+    description: mission.description,
+    min_order_amount: mission.min_order_amount,
+    reward_type: mission.reward_type,
+    reward_point: mission.reward_point,
+    reward_rate: mission.reward_rate,
+    due_date: mission.closed_at,
+  }));
+
+// 내가 진행 중인 미션 목록 응답
+export const responseFromMyMissions = (userMissions) =>
+  toCursorPage(userMissions, (userMission) => ({
+    user_mission_id: userMission.id,
+    mission_id: userMission.mission_id,
+    store_id: userMission.store_id,
+    store_name: userMission.stores.name,
+    mission_name: userMission.missions.title,
+    min_order_amount: userMission.missions.min_order_amount,
+    reward_type: userMission.reward_type,
+    reward_point: userMission.reward_point,
+    reward_rate: userMission.reward_rate,
+    status: userMission.status,
+    started_at: userMission.started_at,
+    due_date: userMission.expires_at,
+  }));
+
+// 미션 완료 요청
+// 비율(RATE) 보상 미션은 결제 금액으로 포인트를 계산하므로 paid_amount를 받는다. (POINT 미션은 없어도 된다)
+export const bodyToCompleteMission = (body, userMissionId) => ({
+  userMissionId: parseId(userMissionId, "userMissionId"),
+  userId: optionalId(body.user_id, "user_id"),
+  paidAmount:
+    body.paid_amount === undefined
+      ? undefined
+      : parsePositiveInt(body.paid_amount, "paid_amount"),
+});
+
+export const responseFromCompletedUserMission = (userMission, pointBalance) => ({
+  ...responseFromUserMission(userMission),
+  paid_amount: userMission.paid_amount,
+  earned_point: userMission.earned_point,
+  completed_at: userMission.completed_at,
+  point_balance: pointBalance,
 });

@@ -110,3 +110,39 @@ export const getUserPreferencesByUserId = async (userId) => {
     name: preference.food_categories.name,
   }));
 };
+
+// 포인트를 원자적으로 더하고, 더한 뒤의 잔액을 돌려준다.
+export const increaseUserPoint = async (tx, userId, amount) => {
+  const user = await tx.users.update({
+    where: { id: userId },
+    data: { point_balance: { increment: amount } },
+    select: { point_balance: true },
+  });
+
+  return user.point_balance;
+};
+
+// 포인트 지급 내역 저장
+// (source_type, source_id, type)이 유니크 키라서 같은 미션에 보상이 두 번 들어가면 DB가 막아준다.
+export const insertPointTransaction = async (tx, data) => {
+  await tx.point_transactions.create({
+    data: {
+      user_id: data.userId,
+      amount: data.amount,
+      balance_after: data.balanceAfter,
+      type: data.type,
+      source_type: data.sourceType,
+      source_id: data.sourceId,
+      description: data.description,
+    },
+  });
+};
+
+// 지역별 미션 성공 횟수 +1 (해당 지역에서 처음 성공했다면 row를 새로 만든다)
+export const increaseRegionSuccessCount = async (tx, userId, regionId) => {
+  await tx.user_region_progress.upsert({
+    where: { user_id_region_id: { user_id: userId, region_id: regionId } },
+    create: { user_id: userId, region_id: regionId, success_count: 1 },
+    update: { success_count: { increment: 1 }, updated_at: new Date() },
+  });
+};

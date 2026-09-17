@@ -22,4 +22,10 @@ node_modules/
 # dotenv environment variable files
 .env
 .env.*
+!.env.example
+
+# prisma generate 결과물 (schema.prisma로 언제든 다시 만들 수 있음)
 /src/generated/prisma
+
+# DB 덤프 (실제 데이터가 들어있음)
+/backup
