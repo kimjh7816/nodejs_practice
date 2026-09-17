@@ -3,7 +3,8 @@ import express from "express";
 import cors from "cors";
 import { StatusCodes } from "http-status-codes";
 
-import { pool, testConnection } from "./db.config.js";
+import "./utils/bigint.js"; // Prisma가 돌려주는 BigInt id를 JSON으로 내보낼 수 있게 한다
+import { disconnect, testConnection } from "./db.config.js";
 import { handleUserSignUp } from "./controllers/user.controller.js";
 import {
   handleAddMission,
@@ -84,7 +85,7 @@ app.use((err, req, res, next) => {
 // DB 연결을 먼저 확인한 뒤 서버를 띄운다.
 try {
   await testConnection();
-  console.log("MySQL 연결 성공");
+  console.log("MySQL 연결 성공 (Prisma)");
 } catch (err) {
   console.error("MySQL 연결 실패:", err.message);
   process.exit(1);
@@ -97,7 +98,7 @@ const server = app.listen(port, () => {
 // 종료할 때 커넥션 풀도 같이 정리
 const shutdown = async () => {
   server.close();
-  await pool.end();
+  await disconnect();
   process.exit(0);
 };
 process.on("SIGINT", shutdown);

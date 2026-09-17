@@ -1,4 +1,4 @@
-import { withTransaction } from "../db.config.js";
+import { prisma } from "../db.config.js";
 import { responseFromReview } from "../dtos/review.dto.js";
 import { NotFoundError } from "../errors.js";
 import {
@@ -15,18 +15,19 @@ export const addReview = async (data) => {
   const userId = await resolveCurrentUserId(data.userId);
 
   // 리뷰 저장, 이미지 저장, 가게 평점 갱신 중 하나라도 실패하면 모두 되돌린다.
-  const reviewId = await withTransaction(async (conn) => {
+  // $transaction의 콜백이 정상 종료하면 commit, 에러를 던지면 rollback 된다.
+  const reviewId = await prisma.$transaction(async (tx) => {
     // 리뷰를 추가하려는 가게가 존재하는지 검증
-    const store = await findStoreById(data.storeId, { conn, forUpdate: true });
+    const store = await findStoreById(data.storeId, { tx, forUpdate: true });
     if (!store) {
       throw new NotFoundError("존재하지 않는 가게입니다.");
     }
 
-    const newReviewId = await insertReview(conn, { ...data, userId });
+    const newReviewId = await insertReview(tx, { ...data, userId });
     if (data.imageUrl) {
-      await insertReviewImage(conn, newReviewId, data.imageUrl);
+      await insertReviewImage(tx, newReviewId, data.imageUrl);
     }
-    await applyReviewToStore(conn, data.storeId, data.rating);
+    await applyReviewToStore(tx, data.storeId, data.rating);
 
     return newReviewId;
   });

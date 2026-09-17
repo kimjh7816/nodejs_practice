@@ -1,4 +1,4 @@
-import { withTransaction } from "../db.config.js";
+import { prisma } from "../db.config.js";
 import {
   responseFromMission,
   responseFromUserMission,
@@ -36,10 +36,11 @@ export const addMission = async (data) => {
 export const challengeMission = async (data) => {
   const userId = await resolveCurrentUserId(data.userId);
 
-  const userMissionId = await withTransaction(async (conn) => {
+  // $transaction의 콜백이 정상 종료하면 commit, 에러를 던지면 rollback 된다.
+  const userMissionId = await prisma.$transaction(async (tx) => {
     // 같은 미션에 동시에 도전 요청이 들어와도 중복 검사와 발급 수 증가가 꼬이지 않도록 미션 row를 잠근다.
     const mission = await findMissionById(data.missionId, {
-      conn,
+      tx,
       forUpdate: true,
     });
     if (!mission) {
@@ -63,7 +64,7 @@ export const challengeMission = async (data) => {
     }
 
     // 도전하려는 미션이 이미 도전 중인지 검증
-    if (await existsActiveUserMission(conn, userId, mission.id)) {
+    if (await existsActiveUserMission(tx, userId, mission.id)) {
       throw new ConflictError("이미 도전 중인 미션입니다.");
     }
 
@@ -73,7 +74,7 @@ export const challengeMission = async (data) => {
       expiresAt = mission.closed_at;
     }
 
-    const newUserMissionId = await insertUserMission(conn, {
+    const newUserMissionId = await insertUserMission(tx, {
       userId,
       missionId: mission.id,
       storeId: mission.store_id,
@@ -83,7 +84,7 @@ export const challengeMission = async (data) => {
       rewardRate: mission.reward_rate,
       expiresAt,
     });
-    await increaseMissionIssuedCount(conn, mission.id);
+    await increaseMissionIssuedCount(tx, mission.id);
 
     return newUserMissionId;
   });

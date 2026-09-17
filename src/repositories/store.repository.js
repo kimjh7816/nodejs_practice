@@ -1,42 +1,41 @@
-import { pool } from "../db.config.js";
+import { prisma } from "../db.config.js";
 
-export const findRegionById = async (regionId) => {
-  const [rows] = await pool.query(
-    `SELECT id, display_name, is_active FROM regions WHERE id = ?;`,
-    [regionId]
-  );
-  return rows[0] ?? null;
-};
+export const findRegionById = async (regionId) =>
+  prisma.regions.findUnique({
+    where: { id: regionId },
+    select: { id: true, display_name: true, is_active: true },
+  });
 
-export const findFoodCategoryById = async (categoryId) => {
-  const [rows] = await pool.query(
-    `SELECT id, name, is_active FROM food_categories WHERE id = ?;`,
-    [categoryId]
-  );
-  return rows[0] ?? null;
-};
+export const findFoodCategoryById = async (categoryId) =>
+  prisma.food_categories.findUnique({
+    where: { id: categoryId },
+    select: { id: true, name: true, is_active: true },
+  });
 
 export const insertStore = async (data) => {
-  const [result] = await pool.query(
-    `INSERT INTO stores (region_id, category_id, name, address1, open_time, close_time)
-     VALUES (?, ?, ?, ?, ?, ?);`,
-    [
-      data.regionId,
-      data.categoryId,
-      data.name,
-      data.address,
-      data.openTime,
-      data.closeTime,
-    ]
-  );
-  return result.insertId;
+  const store = await prisma.stores.create({
+    data: {
+      region_id: data.regionId,
+      category_id: data.categoryId,
+      name: data.name,
+      address1: data.address,
+      open_time: data.openTime,
+      close_time: data.closeTime,
+    },
+    select: { id: true },
+  });
+
+  return store.id;
 };
 
-// conn을 넘기면 트랜잭션 안에서 조회하고, forUpdate면 해당 row에 잠금을 건다.
-export const findStoreById = async (storeId, { conn = pool, forUpdate = false } = {}) => {
-  const [rows] = await conn.query(
-    `SELECT * FROM stores WHERE id = ?${forUpdate ? " FOR UPDATE" : ""};`,
-    [storeId]
-  );
-  return rows[0] ?? null;
+// tx를 넘기면 트랜잭션 안에서 조회하고, forUpdate면 해당 row에 잠금을 건다.
+// Prisma Client API에는 행 잠금이 없어서 잠그는 쿼리만 raw로 보낸다.
+// 잠금은 트랜잭션이 끝날 때까지 유지되므로, 값은 그 뒤에 findUnique로 읽어도 안전하다.
+// (raw 결과를 그대로 쓰면 UNSIGNED INT가 BigInt로 오는 등 타입이 달라지므로 값 조회는 Prisma에 맡긴다)
+export const findStoreById = async (storeId, { tx = prisma, forUpdate = false } = {}) => {
+  if (forUpdate) {
+    await tx.$queryRaw`SELECT id FROM stores WHERE id = ${storeId} FOR UPDATE`;
+  }
+
+  return tx.stores.findUnique({ where: { id: storeId } });
 };

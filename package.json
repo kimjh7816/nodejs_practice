@@ -6,7 +6,7 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon --exec node src/index.js",
+    "dev": "nodemon -e js,json,prisma --exec \"prisma generate && node src/index.js\"",
     "db:check": "node src/scripts/check-db.js",
     "test": "node --test"
   },
@@ -24,6 +24,8 @@
     "node": ">=24"
   },
   "dependencies": {
+    "@prisma/adapter-mariadb": "^7.10.0",
+    "@prisma/client": "^7.10.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
@@ -31,6 +33,7 @@
     "mysql2": "^3.24.4"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "prisma": "^7.10.0"
   }
 }

@@ -1,12 +1,14 @@
 # nodejs_practice
 
 Node.js 공부 기록 저장소. Express와 MySQL로 음식점 미션 서비스 API를 만들어보고 있습니다.
+DB 접근은 Prisma ORM으로 합니다.
 
 ## 환경
 
 - Node.js 24 (`.nvmrc` 참고)
 - npm 11
 - MySQL 8
+- Prisma ORM 7
 
 ## 실행
 
@@ -17,18 +19,24 @@ npm run dev      # 파일 변경 시 자동 재시작 (nodemon)
 npm run db:check # .env 정보로 MySQL에 붙는지 확인
 ```
 
+`prisma/schema.prisma`를 바꾸거나 DB 스키마가 바뀌면 Prisma Client를 다시 만들어야 합니다.
+
+```bash
+npx prisma db pull   # 실제 DB 스키마를 schema.prisma로 가져오기
+npx prisma generate  # schema.prisma로 Prisma Client 생성 (src/generated/prisma)
+npx prisma studio    # 브라우저로 데이터 확인
+```
+
 `.env.example`을 복사해 `.env`를 만들고 DB 접속 정보를 채웁니다.
 
 ```bash
 cp .env.example .env
 ```
 
-| 변수 | 설명 | 기본값 |
+| 변수 | 설명 | 예시 |
 | --- | --- | --- |
 | `PORT` | 서버 포트 | 3000 |
-| `DB_HOST` / `DB_PORT` | MySQL 주소와 포트 | localhost / 3306 |
-| `DB_USER` / `DB_PASSWORD` | 접속 계정 | root / (빈 값) |
-| `DB_NAME` | 데이터베이스 이름 | node_study |
+| `DATABASE_URL` | MySQL 접속 URL. Prisma Client와 Prisma CLI가 함께 사용합니다. | `mysql://root:password@localhost:3306/node_study` |
 
 서버는 뜨기 전에 DB 연결을 먼저 확인하고, 실패하면 바로 종료됩니다.
 
@@ -37,15 +45,19 @@ cp .env.example .env
 요청은 `controller → service → repository` 순서로 흐르고, 요청/응답 형태 변환은 DTO가 담당합니다.
 
 ```
+prisma/schema.prisma        # DB 스키마 (prisma db pull로 가져온 모델 정의)
+prisma7.config.ts           # Prisma CLI 설정 (schema 위치, DATABASE_URL)
 src/
 ├── index.js                # 앱 설정, 라우트 등록, 에러 핸들러
-├── db.config.js            # MySQL 커넥션 풀, 트랜잭션 헬퍼(withTransaction)
+├── db.config.js            # Prisma Client 생성 (mariadb 드라이버 어댑터)
 ├── errors.js               # 상태 코드를 가진 에러 클래스(HttpError 등)
 ├── controllers/            # 요청을 받아 DTO로 변환하고 서비스를 호출
-├── services/               # 검증과 비즈니스 규칙
-├── repositories/           # SQL 실행
+├── services/               # 검증과 비즈니스 규칙, 트랜잭션(prisma.$transaction)
+├── repositories/           # Prisma Client 쿼리 실행
 ├── dtos/                   # 요청 body → 내부 객체, DB row → 응답 형태
+├── generated/prisma/       # prisma generate로 만들어진 Prisma Client (git 제외)
 ├── utils/validation.js     # id·문자열 등 공통 입력 검증
+├── utils/bigint.js         # BigInt(id)를 JSON으로 내보내기 위한 설정
 └── scripts/check-db.js     # DB 연결 확인 스크립트
 ```
 

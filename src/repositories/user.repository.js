@@ -1,176 +1,112 @@
-import { pool } from "../db.config.js";
+import { prisma } from "../db.config.js";
 
-// User 데이터 삽입
+// 목록/단건 조회에서 공통으로 내려주는 컬럼들
+const USER_SUMMARY_SELECT = {
+  id: true,
+  email: true,
+  name: true,
+  nickname: true,
+  gender: true,
+  region_id: true,
+  point_balance: true,
+  status: true,
+  created_at: true,
+};
+
+// User 데이터 삽입 (이미 가입된 이메일이면 null)
 export const addUser = async (data) => {
-  const conn = await pool.getConnection();
+  const existing = await prisma.users.findUnique({
+    where: { email: data.email },
+    select: { id: true },
+  });
 
-  try {
-    const [confirm] = await pool.query(
-      `SELECT EXISTS(SELECT 1 FROM users WHERE email = ?) as isExistEmail;`,
-      data.email
-    );
-
-    if (confirm[0].isExistEmail) {
-      return null;
-    }
-
-    const [result] = await pool.query(
-      `INSERT INTO users (email, name, gender, birth_date, address1, address2, phone) VALUES (?, ?, ?, ?, ?, ?, ?);`,
-      [
-        data.email,
-        data.name,
-        data.gender,
-        data.birth,
-        data.address,
-        data.detailAddress,
-        data.phoneNumber,
-      ]
-    );
-
-    return result.insertId;
-  } catch (err) {
-    throw new Error(
-      `오류가 발생했어요. 요청 파라미터를 확인해주세요. (${err})`
-    );
-  } finally {
-    conn.release();
+  if (existing) {
+    return null;
   }
+
+  const user = await prisma.users.create({
+    data: {
+      email: data.email,
+      name: data.name,
+      gender: data.gender,
+      birth_date: data.birth,
+      address1: data.address,
+      address2: data.detailAddress,
+      phone: data.phoneNumber,
+    },
+    select: { id: true },
+  });
+
+  return user.id;
 };
 
 // 사용자 정보 얻기
-export const getUser = async (userId) => {
-  const conn = await pool.getConnection();
-
-  try {
-    const [user] = await pool.query(`SELECT * FROM users WHERE id = ?;`, userId);
-
-    console.log(user);
-
-    if (user.length == 0) {
-      return null;
-    }
-
-    return user;
-  } catch (err) {
-    throw new Error(
-      `오류가 발생했어요. 요청 파라미터를 확인해주세요. (${err})`
-    );
-  } finally {
-    conn.release();
-  }
-};
+export const getUser = async (userId) =>
+  prisma.users.findUnique({ where: { id: userId } });
 
 // 음식 선호 카테고리 매핑
 export const setPreference = async (userId, foodCategoryId) => {
-  const conn = await pool.getConnection();
-
-  try {
-    await pool.query(
-      `INSERT INTO user_food_preferences (user_id, category_id) VALUES (?, ?);`,
-      [userId, foodCategoryId]
-    );
-
-    return;
-  } catch (err) {
-    throw new Error(
-      `오류가 발생했어요. 요청 파라미터를 확인해주세요. (${err})`
-    );
-  } finally {
-    conn.release();
-  }
+  await prisma.user_food_preferences.create({
+    data: { user_id: userId, category_id: foodCategoryId },
+  });
 };
 
 // 사용자 목록 조회 (페이징)
-export const findAllUsers = async ({ limit, offset }) => {
-  const conn = await pool.getConnection();
-
-  try {
-    const [rows] = await pool.query(
-      `SELECT id, email, name, nickname, gender, region_id, point_balance, status, created_at
-         FROM users
-        ORDER BY id
-        LIMIT ? OFFSET ?;`,
-      [limit, offset]
-    );
-
-    return rows;
-  } catch (err) {
-    throw new Error(
-      `오류가 발생했어요. 요청 파라미터를 확인해주세요. (${err})`
-    );
-  } finally {
-    conn.release();
-  }
-};
+export const findAllUsers = async ({ limit, offset }) =>
+  prisma.users.findMany({
+    select: USER_SUMMARY_SELECT,
+    orderBy: { id: "asc" },
+    take: limit,
+    skip: offset,
+  });
 
 // 사용자 단건 조회
-export const findUserById = async (id) => {
-  const conn = await pool.getConnection();
-
-  try {
-    const [rows] = await pool.query(
-      `SELECT id, email, name, nickname, gender, region_id, point_balance, status, created_at
-         FROM users
-        WHERE id = ?;`,
-      [id]
-    );
-
-    return rows[0] ?? null;
-  } catch (err) {
-    throw new Error(
-      `오류가 발생했어요. 요청 파라미터를 확인해주세요. (${err})`
-    );
-  } finally {
-    conn.release();
-  }
-};
+export const findUserById = async (id) =>
+  prisma.users.findUnique({ where: { id }, select: USER_SUMMARY_SELECT });
 
 // 인증 기능이 생기기 전까지 "현재 로그인한 사용자"로 쓸 첫 번째 사용자 id
 export const findFirstUserId = async () => {
-  const [rows] = await pool.query(`SELECT id FROM users ORDER BY id LIMIT 1;`);
-  return rows[0]?.id ?? null;
+  const user = await prisma.users.findFirst({
+    orderBy: { id: "asc" },
+    select: { id: true },
+  });
+
+  return user?.id ?? null;
 };
 
 // 사용자 생성
 export const createUser = async ({ email, name, nickname, gender, regionId }) => {
-  const conn = await pool.getConnection();
+  const user = await prisma.users.create({
+    data: {
+      email,
+      name,
+      nickname,
+      gender: gender ?? "NONE",
+      region_id: regionId ?? null,
+    },
+    select: { id: true },
+  });
 
-  try {
-    const [result] = await pool.query(
-      `INSERT INTO users (email, name, nickname, gender, region_id) VALUES (?, ?, ?, ?, ?);`,
-      [email, name, nickname, gender ?? "NONE", regionId ?? null]
-    );
-
-    return result.insertId;
-  } catch (err) {
-    throw new Error(
-      `오류가 발생했어요. 요청 파라미터를 확인해주세요. (${err})`
-    );
-  } finally {
-    conn.release();
-  }
+  return user.id;
 };
 
 // 사용자 선호 카테고리 반환
+// JOIN은 관계 필드(food_categories)를 include/select 하면 Prisma가 알아서 만들어준다.
 export const getUserPreferencesByUserId = async (userId) => {
-  const conn = await pool.getConnection();
+  const preferences = await prisma.user_food_preferences.findMany({
+    where: { user_id: userId },
+    select: {
+      user_id: true,
+      category_id: true,
+      food_categories: { select: { name: true } },
+    },
+    orderBy: { category_id: "asc" },
+  });
 
-  try {
-    const [preferences] = await pool.query(
-      "SELECT ufp.category_id AS food_category_id, ufp.user_id, fc.name " +
-        "FROM user_food_preferences ufp JOIN food_categories fc ON ufp.category_id = fc.id " +
-        "WHERE ufp.user_id = ? ORDER BY ufp.category_id ASC;",
-      userId
-    );
-
-    return preferences;
-  } catch (err) {
-    throw new Error(
-      `오류가 발생했어요. 요청 파라미터를 확인해주세요. (${err})`
-    );
-  } finally {
-    conn.release();
-  }
+  // 기존 SQL과 같은 평평한 모양(food_category_id, user_id, name)으로 맞춰서 돌려준다.
+  return preferences.map((preference) => ({
+    food_category_id: preference.category_id,
+    user_id: preference.user_id,
+    name: preference.food_categories.name,
+  }));
 };
-
-

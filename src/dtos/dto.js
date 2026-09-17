@@ -26,18 +26,15 @@ export const bodyToUser = (body) => {
 
 // DB 조회 결과(user, preferences)를 클라이언트에 내려줄 응답 형태로 변환
 export const responseFromUser = ({ user, preferences }) => {
-  // getUser는 SELECT 결과 배열을 반환하므로 첫 번째 row를 꺼낸다.
-  const userInfo = user[0];
-
   return {
-    id: userInfo.id,
-    email: userInfo.email,
-    name: userInfo.name,
-    gender: userInfo.gender,
-    birth: userInfo.birth_date,
-    address: userInfo.address1,
-    detailAddress: userInfo.address2,
-    phoneNumber: userInfo.phone,
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    gender: user.gender,
+    birth: user.birth_date,
+    address: user.address1,
+    detailAddress: user.address2,
+    phoneNumber: user.phone,
     // 선호 카테고리는 JOIN으로 가져온 카테고리 이름만 배열로 내려준다.
     preferCategory: preferences.map((preference) => preference.name),
   };
