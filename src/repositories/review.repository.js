@@ -21,15 +21,30 @@ export const insertReviewImage = async (tx, reviewId, imageUrl, sortOrder = 0) =
 };
 
 // 새 리뷰를 반영해 가게의 평균 평점과 리뷰 수를 갱신한다.
-// rating_avg는 기존 컬럼 값(rating_avg, review_count)으로 계산해야 해서 Prisma Client API로는 표현할 수 없다.
-// (increment 같은 원자적 연산은 있지만 컬럼끼리 곱하고 나누는 식은 raw로 써야 한다)
-// MySQL UPDATE는 SET을 왼쪽부터 적용하므로, review_count를 올리기 전에 rating_avg를 먼저 계산해야 한다.
-export const applyReviewToStore = async (tx, storeId, rating) => {
-  await tx.$executeRaw`
-    UPDATE stores
-       SET rating_avg = ROUND((rating_avg * review_count + ${rating}) / (review_count + 1), 1),
-           review_count = review_count + 1
-     WHERE id = ${storeId}`;
+//
+// 1) review_count는 increment로 원자적으로 올린다. 이 UPDATE가 가게 row에 배타 잠금을 걸기 때문에,
+//    같은 가게에 동시에 들어온 다른 리뷰 트랜잭션은 여기서 멈췄다가 우리가 커밋한 뒤에 이어서 진행한다.
+// 2) rating_avg는 reviews 테이블에서 다시 집계한다.
+//    (컬럼끼리 곱하고 나누는 UPDATE는 Prisma Client API로 표현할 수 없어서, 원본에서 평균을 새로 구한다)
+//    1)의 잠금을 쥔 채로 집계하므로 다른 리뷰가 중간에 끼어들지 않는다.
+//    단, 이 집계가 직전에 커밋된 리뷰까지 보려면 트랜잭션 격리 수준이 READ COMMITTED여야 한다.
+//    (MySQL 기본값인 REPEATABLE READ는 트랜잭션 시작 시점의 스냅샷을 계속 보여준다)
+export const applyReviewToStore = async (tx, storeId) => {
+  await tx.stores.update({
+    where: { id: storeId },
+    data: { review_count: { increment: 1 } },
+  });
+
+  const { _avg } = await tx.reviews.aggregate({
+    where: { store_id: storeId, deleted_at: null },
+    _avg: { rating: true },
+  });
+
+  // rating_avg 컬럼은 DECIMAL(2,1)이라 소수점 첫째 자리까지만 저장된다.
+  await tx.stores.update({
+    where: { id: storeId },
+    data: { rating_avg: Math.round((Number(_avg.rating) || 0) * 10) / 10 },
+  });
 };
 
 export const findReviewById = async (reviewId) =>

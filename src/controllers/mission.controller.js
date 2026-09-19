@@ -12,7 +12,7 @@ export const handleChallengeMission = async (req, res) => {
   const userMission = await challengeMission(
     bodyToChallenge(req.body, req.params.missionId)
   );
-  res.status(StatusCodes.CREATED).json({ result: userMission });
+  res.status(StatusCodes.CREATED).success(userMission);
 };
 
 // GET /users/me/missions?cursor=&user_id=
@@ -22,7 +22,7 @@ export const handleListMyMissions = async (req, res) => {
     optionalId(req.query.user_id, "user_id"),
     parseCursor(req.query.cursor)
   );
-  res.status(StatusCodes.OK).json({ result: missions });
+  res.status(StatusCodes.OK).success(missions);
 };
 
 // PATCH /users/me/missions/:userMissionId/complete
@@ -31,5 +31,5 @@ export const handleCompleteMission = async (req, res) => {
   const userMission = await completeMission(
     bodyToCompleteMission(req.body ?? {}, req.params.userMissionId)
   );
-  res.status(StatusCodes.OK).json({ result: userMission });
+  res.status(StatusCodes.OK).success(userMission);
 };
