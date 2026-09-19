@@ -10,19 +10,19 @@ import { parseCursor, parseId } from "../utils/validation.js";
 // POST /regions/:regionId/stores
 export const handleAddStore = async (req, res) => {
   const store = await addStore(bodyToStore(req.body, req.params.regionId));
-  res.status(StatusCodes.CREATED).json({ result: store });
+  res.status(StatusCodes.CREATED).success(store);
 };
 
 // POST /reviews/:storeId
 export const handleAddReview = async (req, res) => {
   const review = await addReview(bodyToReview(req.body, req.params.storeId));
-  res.status(StatusCodes.CREATED).json({ result: review });
+  res.status(StatusCodes.CREATED).success(review);
 };
 
 // POST /stores/:storeId/missions
 export const handleAddMission = async (req, res) => {
   const mission = await addMission(bodyToMission(req.body, req.params.storeId));
-  res.status(StatusCodes.CREATED).json({ result: mission });
+  res.status(StatusCodes.CREATED).success(mission);
 };
 
 // GET /stores/:storeId/reviews?cursor=
@@ -32,7 +32,7 @@ export const handleListStoreReviews = async (req, res) => {
     parseId(req.params.storeId, "storeId"),
     parseCursor(req.query.cursor)
   );
-  res.status(StatusCodes.OK).json({ result: reviews });
+  res.status(StatusCodes.OK).success(reviews);
 };
 
 // GET /stores/:storeId/missions?cursor=
@@ -41,5 +41,5 @@ export const handleListStoreMissions = async (req, res) => {
     parseId(req.params.storeId, "storeId"),
     parseCursor(req.query.cursor)
   );
-  res.status(StatusCodes.OK).json({ result: missions });
+  res.status(StatusCodes.OK).success(missions);
 };

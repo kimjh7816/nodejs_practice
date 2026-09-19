@@ -1,3 +1,11 @@
+import {
+  optionalDate,
+  optionalString,
+  parseIdList,
+  requireEmail,
+  requireString,
+} from "../utils/validation.js";
+
 // 다양한 입력(한글/영문/약자)을 users.gender ENUM 값으로 변환한다.
 const normalizeGender = (value) => {
   const key = String(value ?? "").trim().toLowerCase();
@@ -9,20 +17,18 @@ const normalizeGender = (value) => {
   return map[key] ?? "NONE";
 };
 
-export const bodyToUser = (body) => {
-  const birth = body.birth ? new Date(body.birth) : null;
-
-  return {
-    email: body.email,
-    name: body.name,
-    gender: normalizeGender(body.gender),
-    birth,
-    address: body.address || "",
-    detailAddress: body.detailAddress || "",
-    phoneNumber: body.phoneNumber,
-    preferences: body.preferences ?? [],
-  };
-};
+// 검증하지 않고 넘기면 DB 제약(NOT NULL, 길이, UNIQUE)에 걸려 500이 나므로
+// 컬럼 정의에 맞춰 여기서 먼저 걸러낸다.
+export const bodyToUser = (body = {}) => ({
+  email: requireEmail(body.email),
+  name: requireString(body.name, "name", 50),
+  gender: normalizeGender(body.gender),
+  birth: optionalDate(body.birth, "birth"),
+  address: optionalString(body.address, "address", 200) ?? "",
+  detailAddress: optionalString(body.detailAddress, "detailAddress", 100) ?? "",
+  phoneNumber: optionalString(body.phoneNumber, "phoneNumber", 20),
+  preferences: parseIdList(body.preferences, "preferences"),
+});
 
 // DB 조회 결과(user, preferences)를 클라이언트에 내려줄 응답 형태로 변환
 export const responseFromUser = ({ user, preferences }) => {

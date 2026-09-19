@@ -1,5 +1,9 @@
 import { responseFromStore } from "../dtos/store.dto.js";
-import { BadRequestError, NotFoundError } from "../errors.js";
+import {
+  FoodCategoryNotFoundError,
+  RegionNotActiveError,
+  RegionNotFoundError,
+} from "../errors.js";
 import {
   findFoodCategoryById,
   findRegionById,
@@ -10,15 +14,15 @@ import {
 export const addStore = async (data) => {
   const region = await findRegionById(data.regionId);
   if (!region) {
-    throw new NotFoundError("존재하지 않는 지역입니다.");
+    throw new RegionNotFoundError({ regionId: data.regionId });
   }
   if (!region.is_active) {
-    throw new BadRequestError("서비스하지 않는 지역입니다.");
+    throw new RegionNotActiveError({ regionId: data.regionId });
   }
 
   const category = await findFoodCategoryById(data.categoryId);
   if (!category) {
-    throw new NotFoundError("존재하지 않는 가게 카테고리입니다.");
+    throw new FoodCategoryNotFoundError({ categoryId: data.categoryId });
   }
 
   const storeId = await insertStore(data);

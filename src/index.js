@@ -6,6 +6,20 @@ import { StatusCodes } from "http-status-codes";
 import "./utils/bigint.js"; // Prisma가 돌려주는 BigInt id를 JSON으로 내보낼 수 있게 한다
 import { disconnect, testConnection } from "./db.config.js";
 import {
+  InvalidJsonError,
+  RouteNotFoundError,
+  ServiceError,
+  UserNotFoundError,
+} from "./errors.js";
+import {
+  optionalId,
+  parseId,
+  parseOffset,
+  parsePositiveInt,
+  requireEmail,
+  requireString,
+} from "./utils/validation.js";
+import {
   handleListMyReviews,
   handleUserSignUp,
 } from "./controllers/user.controller.js";
@@ -32,16 +46,34 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT ?? 3000;
 
+/*** 공통 응답을 사용할 수 있는 헬퍼 함수 등록 ***/
+// 모든 API는 { resultType, error, success } 한 가지 형태로만 응답한다.
+app.use((req, res, next) => {
+  res.success = (success) => {
+    return res.json({ resultType: "SUCCESS", error: null, success });
+  };
+
+  res.error = ({ errorCode = "unknown", reason = null, data = null }) => {
+    return res.json({
+      resultType: "FAIL",
+      error: { errorCode, reason, data },
+      success: null,
+    });
+  };
+
+  next();
+});
+
 app.use(cors()); // cors 방식 허용
 app.use(express.static("public")); // 정적 파일 접근
 app.use(express.json()); // JSON 형태의 요청 body를 파싱
 app.use(express.urlencoded({ extended: false })); // 단순 객체 문자열 형태로 본문 데이터 해석
 
 app.get("/", (req, res) => {
-  res.send("Hello World!");
+  res.success("Hello World!");
 });
 
-app.post("/api/v1/users/sign-up", handleUserSignUp);
+app.post("/api/v1/users/sign-up", handleUserSignUp); // 회원가입
 
 app.post("/api/v1/regions/:regionId/stores", handleAddStore); // 특정 지역에 가게 추가
 app.post("/api/v1/reviews/:storeId", handleAddReview); // 가게에 리뷰 추가 (끝에 / 가 붙어도 매칭됨)
@@ -61,44 +93,72 @@ app.patch(
 // DB가 살아있는지 확인하는 헬스 체크
 app.get("/health/db", async (req, res) => {
   await testConnection();
-  res.json({ db: "ok" });
+  res.success({ db: "ok" });
 });
 
+/*** Prisma 전환 이전에 만든 확인용 라우트 ***/
+// 회원가입 API와 기능이 겹치는 임시 라우트지만, 응답만 공통 규격에 맞춰 남겨둔다.
 app.get("/users", async (req, res) => {
-  const limit = Number(req.query.limit ?? 20);
-  const offset = Number(req.query.offset ?? 0);
-  res.json(await findAllUsers({ limit, offset }));
+  const limit = parsePositiveInt(req.query.limit ?? 20, "limit");
+  const offset = parseOffset(req.query.offset);
+  res.success(await findAllUsers({ limit, offset }));
 });
 
 app.get("/users/:id", async (req, res) => {
-  const user = await findUserById(req.params.id);
+  const user = await findUserById(parseId(req.params.id, "id"));
   if (!user) {
-    return res.status(StatusCodes.NOT_FOUND).json({ message: "user not found" });
+    throw new UserNotFoundError({ userId: req.params.id });
   }
-  res.json(user);
+  res.success(user);
 });
 
 app.post("/users", async (req, res) => {
-  const { email, name, nickname, gender, regionId } = req.body;
-  if (!email || !name || !nickname) {
-    return res
-      .status(StatusCodes.BAD_REQUEST)
-      .json({ message: "email, name, nickname은 필수입니다." });
-  }
-  const id = await createUser({ email, name, nickname, gender, regionId });
-  res.status(StatusCodes.CREATED).json({ id });
+  const body = req.body ?? {};
+  const id = await createUser({
+    email: requireEmail(body.email),
+    name: requireString(body.name, "name", 50),
+    nickname: requireString(body.nickname, "nickname", 20),
+    gender: body.gender,
+    regionId: optionalId(body.regionId, "regionId"),
+  });
+  res.status(StatusCodes.CREATED).success({ id });
 });
 
+/*** 등록되지 않은 경로 처리 ***/
+// 여기까지 내려왔다면 매칭된 라우트가 없다는 뜻이므로, Express 기본 HTML 404 대신
+// 공통 오류 규격으로 응답하도록 커스텀 오류를 만들어 아래 오류 핸들러로 넘긴다.
+app.use((req, res, next) => {
+  next(new RouteNotFoundError(req.method, req.originalUrl));
+});
+
+/*** 전역 오류를 처리하기 위한 미들웨어 ***/
 // Express 5는 async 핸들러에서 throw된 에러도 여기로 넘겨준다.
-// HttpError처럼 statusCode가 있는 에러는 그 코드로, 나머지는 500으로 응답한다.
 app.use((err, req, res, next) => {
-  const statusCode = err.statusCode ?? StatusCodes.INTERNAL_SERVER_ERROR;
-  if (statusCode >= StatusCodes.INTERNAL_SERVER_ERROR) {
-    console.error(err);
+  if (res.headersSent) {
+    return next(err);
   }
-  res
-    .status(statusCode)
-    .json({ message: err.message ?? "Internal Server Error" });
+
+  // express.json()이 본문 파싱에 실패하면 SyntaxError를 던진다. 우리 규격의 오류로 바꿔준다.
+  const error =
+    err instanceof SyntaxError && "body" in err ? new InvalidJsonError() : err;
+
+  // ServiceError를 상속한 오류는 의도적으로 던진 것이므로 그대로 내보낸다.
+  if (error instanceof ServiceError) {
+    return res.status(error.statusCode).error({
+      errorCode: error.errorCode,
+      reason: error.reason,
+      data: error.data,
+    });
+  }
+
+  // 여기로 온 오류는 예상하지 못한 것(코드 버그, DB 장애 등)이다.
+  // 내부 사정이 그대로 노출되지 않도록 메시지를 고정하고, 원인은 서버 로그에만 남긴다.
+  console.error(error);
+  return res.status(StatusCodes.INTERNAL_SERVER_ERROR).error({
+    errorCode: "C000",
+    reason: "서버 내부 오류가 발생했습니다.",
+    data: null,
+  });
 });
 
 // DB 연결을 먼저 확인한 뒤 서버를 띄운다.

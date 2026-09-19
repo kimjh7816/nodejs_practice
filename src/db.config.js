@@ -16,9 +16,11 @@ const adapter = new PrismaMariaDb(process.env.DATABASE_URL);
 
 export const prisma = new PrismaClient({ adapter });
 
-// 서버 기동 시 DB가 실제로 붙는지 한 번 확인하는 용도
+// 서버 기동 시 DB가 실제로 붙는지 한 번 확인하는 용도.
+// 연결만 열어보는 것으로는 부족해서(커넥션은 지연 생성될 수 있다) 가벼운 조회를 한 번 보낸다.
 export const testConnection = async () => {
-  await prisma.$queryRaw`SELECT 1`;
+  await prisma.$connect();
+  await prisma.regions.count();
 };
 
 // 종료할 때 커넥션 풀을 정리한다.

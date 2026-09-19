@@ -5,6 +5,7 @@ import {
   optionalString,
   parseId,
   parsePositiveInt,
+  requireDate,
   requireString,
 } from "../utils/validation.js";
 
@@ -14,10 +15,7 @@ export const bodyToMission = (body, storeId) => {
     throw new BadRequestError("reward_point는 1 이상의 정수여야 합니다.");
   }
 
-  const dueDate = new Date(body.due_date);
-  if (!body.due_date || Number.isNaN(dueDate.getTime())) {
-    throw new BadRequestError("due_date는 올바른 날짜 형식이어야 합니다.");
-  }
+  const dueDate = requireDate(body.due_date, "due_date");
   if (dueDate <= new Date()) {
     throw new BadRequestError("due_date는 현재 시각 이후여야 합니다.");
   }
