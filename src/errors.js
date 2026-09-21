@@ -73,10 +73,41 @@ export class UserNotFoundError extends NotFoundError {
   }
 }
 
-// 로그인 기능이 없어 user_id를 생략했는데 DB에 사용자가 한 명도 없는 경우
-export class NoRegisteredUserError extends NotFoundError {
-  constructor() {
-    super("등록된 사용자가 없습니다.", null, "U003");
+// 로그인이 필요한 API를 세션 없이 호출한 경우
+// (U003은 로그인 기능이 없던 시절의 NoRegisteredUserError가 쓰던 번호라 다시 쓰지 않는다)
+export class AuthRequiredError extends ServiceError {
+  constructor(data = null) {
+    super({
+      errorCode: "U004",
+      statusCode: StatusCodes.UNAUTHORIZED,
+      reason: "로그인이 필요합니다.",
+      data,
+    });
+  }
+}
+
+export class DuplicateUserNicknameError extends ConflictError {
+  constructor(data = null) {
+    super("이미 사용 중인 닉네임입니다.", data, "U005");
+  }
+}
+
+// 소셜 로그인 제공자가 이메일을 주지 않은 경우 (사용자가 이메일 제공에 동의하지 않았을 때)
+export class SocialEmailRequiredError extends BadRequestError {
+  constructor(data = null) {
+    super("소셜 계정의 이메일을 가져오지 못했습니다. 이메일 제공에 동의해주세요.", data, "U006");
+  }
+}
+
+// .env에 키가 없어서 꺼져 있는 소셜 로그인을 호출한 경우
+export class SocialProviderNotConfiguredError extends ServiceError {
+  constructor(data = null) {
+    super({
+      errorCode: "U007",
+      statusCode: StatusCodes.SERVICE_UNAVAILABLE,
+      reason: "설정되지 않은 소셜 로그인입니다.",
+      data,
+    });
   }
 }
 

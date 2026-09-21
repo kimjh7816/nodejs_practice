@@ -1,7 +1,6 @@
 import { BadRequestError } from "../errors.js";
 import { toCursorPage } from "../utils/pagination.js";
 import {
-  optionalId,
   optionalString,
   parseId,
   parsePositiveInt,
@@ -43,10 +42,10 @@ export const responseFromMission = (mission) => ({
 
 // 도전할 미션의 가게/지역/보상 정보는 클라이언트가 보낸 값이 아니라 DB의 미션 정보를 기준으로 한다.
 // (body의 store_id, reward_point 등을 믿으면 조작된 값으로 도전할 수 있기 때문)
-export const bodyToChallenge = (body, missionId) => ({
+// 누가 도전하는지도 마찬가지로 body가 아니라 세션에서 온 userId를 쓴다.
+export const toChallenge = (missionId, userId) => ({
   missionId: parseId(missionId, "missionId"),
-  userId:
-    body.user_id === undefined ? undefined : parseId(body.user_id, "user_id"),
+  userId,
 });
 
 export const responseFromUserMission = (userMission) => ({
@@ -97,9 +96,9 @@ export const responseFromMyMissions = (userMissions) =>
 
 // 미션 완료 요청
 // 비율(RATE) 보상 미션은 결제 금액으로 포인트를 계산하므로 paid_amount를 받는다. (POINT 미션은 없어도 된다)
-export const bodyToCompleteMission = (body, userMissionId) => ({
+export const bodyToCompleteMission = (body, userMissionId, userId) => ({
   userMissionId: parseId(userMissionId, "userMissionId"),
-  userId: optionalId(body.user_id, "user_id"),
+  userId,
   paidAmount:
     body.paid_amount === undefined
       ? undefined

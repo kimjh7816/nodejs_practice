@@ -16,6 +16,30 @@ export B=http://localhost:3000/api/v1
 export J="Content-Type: application/json"
 ```
 
+로그인이 필요한 API(아래에서 `$C`를 붙인 명령)는 세션 쿠키가 있어야 한다.
+소셜 로그인은 브라우저에서만 할 수 있으므로, 먼저 브라우저로 로그인한 뒤 쿠키 값을 가져온다.
+
+1. 브라우저에서 <http://localhost:3000/oauth2/login/google> 또는 `.../naver` 로 로그인한다.
+2. 개발자도구 → Application → Cookies → `http://localhost:3000` 에서 `connect.sid` 값을 복사한다.
+3. 아래처럼 등록한다. (값에 `%`, `:` 등이 들어가므로 반드시 따옴표로 감싼다)
+
+```bash
+export C="Cookie: connect.sid=여기에_복사한_값"
+```
+
+제대로 등록됐는지는 내 정보 조회로 확인한다.
+
+```bash
+curl -s -H "$C" "$B/users/me" ; echo
+```
+
+쿠키 없이 부르면 401(`U004`)이 나온다.
+
+```bash
+curl -s -H "$C" "$B/users/me" ; echo
+# {"resultType":"FAIL","error":{"errorCode":"U004","reason":"로그인이 필요합니다.","data":null},"success":null}
+```
+
 응답을 읽기 좋게 보려면 `jq`를 쓰거나, 없으면 `python3 -m json.tool`을 붙인다.
 
 ```bash
@@ -39,8 +63,8 @@ curl -s http://localhost:3000/ ; echo
 curl -s http://localhost:3000/health/db ; echo
 curl -s "$B/stores/1/reviews" ; echo
 curl -s "$B/stores/1/missions" ; echo
-curl -s "$B/users/me/reviews" ; echo
-curl -s "$B/users/me/missions" ; echo
+curl -s -H "$C" "$B/users/me/reviews" ; echo
+curl -s -H "$C" "$B/users/me/missions" ; echo
 ```
 
 기대:
@@ -93,7 +117,7 @@ curl -s "$B/stores/1/reviews?cursor=abc" ; echo
 curl -s "$B/stores/abc/reviews" ; echo
 
 # C001 - rating 범위 초과
-curl -s -X POST "$B/reviews/1" -H "$J" -d '{"rating":9,"review_content":"좋아요"}' ; echo
+curl -s -X POST "$B/reviews/1" -H "$J" -H "$C" -d '{"rating":9,"review_content":"좋아요"}' ; echo
 
 # C001 - due_date가 과거
 curl -s -X POST "$B/stores/1/missions" -H "$J" \
@@ -115,9 +139,18 @@ curl -s -X POST "$B/stores/1/missions" -H "$J" \
 curl -si -X POST "$B/users/sign-up" -H "$J" \
   -d '{"email":"check-001@example.com","name":"엘빈","preferences":[1]}' | tail -2
 
-# U002 - 없는 사용자
-curl -s "$B/users/me/reviews?user_id=999999" ; echo
-curl -s "$B/users/me/missions?user_id=999999" ; echo
+# U004 - 로그인 없이 호출 (쿠키를 빼고 보낸다)
+curl -s "$B/users/me" ; echo
+curl -s "$B/users/me/reviews" ; echo
+
+# U002는 세션은 남아 있는데 그 사용자가 DB에서 사라진 경우에만 나온다.
+# (로그인한 계정을 DB에서 지운 뒤 같은 쿠키로 호출하면 재현된다)
+
+# U005 - 이미 사용 중인 닉네임
+curl -s -X PATCH "$B/users/me" -H "$J" -H "$C" -d '{"nickname":"이미쓰는닉네임"}' ; echo
+
+# S005 - 없는 선호 카테고리
+curl -s -X PATCH "$B/users/me" -H "$J" -H "$C" -d '{"preferences":[999999]}' ; echo
 
 # C001 - email 누락
 curl -s -X POST "$B/users/sign-up" -H "$J" -d '{"name":"엘빈"}' ; echo
@@ -152,7 +185,7 @@ U001 기대:
 # S001 - 없는 가게
 curl -s "$B/stores/99999/reviews" ; echo
 curl -s "$B/stores/99999/missions" ; echo
-curl -s -X POST "$B/reviews/99999" -H "$J" -d '{"rating":5,"review_content":"좋아요"}' ; echo
+curl -s -X POST "$B/reviews/99999" -H "$J" -H "$C" -d '{"rating":5,"review_content":"좋아요"}' ; echo
 
 # S003 - 없는 지역
 curl -s -X POST "$B/regions/99999/stores" -H "$J" \
@@ -184,10 +217,10 @@ curl -s -X POST "$B/users/sign-up" -H "$J" \
 
 ```bash
 # M001 - 없는 미션에 도전
-curl -s -X POST "$B/missions/99999/challenge" -H "$J" -d '{}' ; echo
+curl -s -X POST "$B/missions/99999/challenge" -H "$J" -H "$C" -d '{}' ; echo
 
 # M005 - 없는 도전 미션 완료
-curl -s -X PATCH "$B/users/me/missions/99999/complete" -H "$J" -d '{}' ; echo
+curl -s -X PATCH "$B/users/me/missions/99999/complete" -H "$J" -H "$C" -d '{}' ; echo
 ```
 
 ### 도전 → 중복 도전 → 완료 → 재완료 (M004, M006)
@@ -208,18 +241,18 @@ echo "store=$SID mission=$MID"
 sleep 2
 
 # 도전 (성공)
-UMID=$(curl -s -X POST "$B/missions/$MID/challenge" -H "$J" -d '{}' \
+UMID=$(curl -s -X POST "$B/missions/$MID/challenge" -H "$J" -H "$C" -d '{}' \
   | python3 -c "import json,sys; print(json.load(sys.stdin)['success']['user_mission_id'])")
 echo "user_mission=$UMID"
 
 # M004 - 같은 미션에 또 도전
-curl -s -X POST "$B/missions/$MID/challenge" -H "$J" -d '{}' ; echo
+curl -s -X POST "$B/missions/$MID/challenge" -H "$J" -H "$C" -d '{}' ; echo
 
 # 완료 (성공) - earned_point와 point_balance가 올라간다
-curl -s -X PATCH "$B/users/me/missions/$UMID/complete" -H "$J" -d '{}' ; echo
+curl -s -X PATCH "$B/users/me/missions/$UMID/complete" -H "$J" -H "$C" -d '{}' ; echo
 
 # M006 - 이미 완료한 미션을 또 완료
-curl -s -X PATCH "$B/users/me/missions/$UMID/complete" -H "$J" -d '{}' ; echo
+curl -s -X PATCH "$B/users/me/missions/$UMID/complete" -H "$J" -H "$C" -d '{}' ; echo
 ```
 
 ---
@@ -239,7 +272,7 @@ MID=$(curl -s -X POST "$B/stores/$SID/missions" -H "$J" \
   | python3 -c "import json,sys; print(json.load(sys.stdin)['success']['mission_id'])")
 sleep 2
 
-seq 10 | xargs -P 10 -I% curl -s -X POST "$B/missions/$MID/challenge" -H "$J" -d '{}' \
+seq 10 | xargs -P 10 -I% curl -s -X POST "$B/missions/$MID/challenge" -H "$J" -H "$C" -d '{}' \
   | python3 -c "
 import json,sys
 codes = {}
@@ -267,12 +300,19 @@ await prisma.\$disconnect();
 "
 ```
 
+로그인한 사용자는 한 미션에 한 번만 도전할 수 있으므로(`M004`), 완료 동시성은 새 미션으로 확인한다.
+
 ```bash
 # 완료 요청도 동시에 5번 -> 1건만 SUCCESS, 나머지는 M006 (포인트 중복 지급 없음)
-UMID=$(curl -s -X POST "$B/missions/$MID/challenge" -H "$J" -d '{"user_id":2}' \
+MID2=$(curl -s -X POST "$B/stores/$SID/missions" -H "$J" \
+  -d '{"mission_name":"완료 동시성 미션","reward_point":100,"due_date":"2027-12-31"}' \
+  | python3 -c "import json,sys; print(json.load(sys.stdin)['success']['mission_id'])")
+sleep 2
+
+UMID=$(curl -s -X POST "$B/missions/$MID2/challenge" -H "$J" -H "$C" -d '{}' \
   | python3 -c "import json,sys; print(json.load(sys.stdin)['success']['user_mission_id'])")
 
-seq 5 | xargs -P 5 -I% curl -s -X PATCH "$B/users/me/missions/$UMID/complete" -H "$J" -d '{"user_id":2}' \
+seq 5 | xargs -P 5 -I% curl -s -X PATCH "$B/users/me/missions/$UMID/complete" -H "$J" -H "$C" -d '{}' \
   | python3 -c "
 import json,sys
 codes = {}
@@ -312,7 +352,7 @@ print(codes)"
 저장된 값과 실제 집계가 같아야 한다.
 
 ```bash
-curl -s -X POST "$B/reviews/1" -H "$J" -d '{"rating":4,"review_content":"집계 확인"}' > /dev/null
+curl -s -X POST "$B/reviews/1" -H "$J" -H "$C" -d '{"rating":4,"review_content":"집계 확인"}' > /dev/null
 
 node --input-type=module -e "
 import { prisma } from './src/db.config.js';
