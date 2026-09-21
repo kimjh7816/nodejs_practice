@@ -64,16 +64,6 @@ export const findAllUsers = async ({ limit, offset }) =>
 export const findUserById = async (id) =>
   prisma.users.findUnique({ where: { id }, select: USER_SUMMARY_SELECT });
 
-// 인증 기능이 생기기 전까지 "현재 로그인한 사용자"로 쓸 첫 번째 사용자 id
-export const findFirstUserId = async () => {
-  const user = await prisma.users.findFirst({
-    orderBy: { id: "asc" },
-    select: { id: true },
-  });
-
-  return user?.id ?? null;
-};
-
 // 사용자 생성
 export const createUser = async ({ email, name, nickname, gender, regionId }) => {
   const user = await prisma.users.create({
@@ -89,6 +79,28 @@ export const createUser = async ({ email, name, nickname, gender, regionId }) =>
 
   return user.id;
 };
+
+// 내 정보 수정. data에 담겨 온 컬럼만 바꾸고, 없는 컬럼은 건드리지 않는다.
+export const updateUser = async (userId, data) =>
+  prisma.users.update({
+    where: { id: userId },
+    data: { ...data, updated_at: new Date() },
+  });
+
+// 선호 카테고리 교체. 부분 수정이 아니라 보내준 목록으로 통째로 바꾼다.
+// 지우고 다시 넣는 사이에 조회가 끼어들면 빈 목록이 보일 수 있으므로 한 트랜잭션으로 묶는다.
+export const replacePreferences = async (userId, categoryIds) =>
+  prisma.$transaction(async (tx) => {
+    await tx.user_food_preferences.deleteMany({ where: { user_id: userId } });
+    if (categoryIds.length > 0) {
+      await tx.user_food_preferences.createMany({
+        data: categoryIds.map((categoryId) => ({
+          user_id: userId,
+          category_id: categoryId,
+        })),
+      });
+    }
+  });
 
 // 사용자 선호 카테고리 반환
 // JOIN은 관계 필드(food_categories)를 include/select 하면 Prisma가 알아서 만들어준다.

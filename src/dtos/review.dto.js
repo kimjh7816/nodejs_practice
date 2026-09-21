@@ -2,7 +2,8 @@ import { BadRequestError } from "../errors.js";
 import { toCursorPage } from "../utils/pagination.js";
 import { optionalString, parseId, requireString } from "../utils/validation.js";
 
-export const bodyToReview = (body, storeId) => {
+// 작성자는 body가 아니라 세션에서 온 userId를 쓴다. (남의 이름으로 리뷰를 쓸 수 없게)
+export const bodyToReview = (body, storeId, userId) => {
   const rating = Number(body.rating);
   if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
     throw new BadRequestError("rating은 1~5 사이의 정수여야 합니다.");
@@ -10,9 +11,7 @@ export const bodyToReview = (body, storeId) => {
 
   return {
     storeId: parseId(storeId, "storeId"),
-    // user_id가 없으면 서비스에서 첫 번째 사용자로 채운다.
-    userId:
-      body.user_id === undefined ? undefined : parseId(body.user_id, "user_id"),
+    userId,
     content: requireString(body.review_content, "review_content", 1000),
     rating,
     imageUrl: optionalString(body.review_image_url, "review_image_url", 512),

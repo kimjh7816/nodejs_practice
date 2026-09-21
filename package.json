@@ -26,10 +26,15 @@
   "dependencies": {
     "@prisma/adapter-mariadb": "^7.10.0",
     "@prisma/client": "^7.10.0",
+    "@quixo3/prisma-session-store": "^3.1.21",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "http-status-codes": "^2.3.0"
+    "express-session": "^1.19.0",
+    "http-status-codes": "^2.3.0",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
+    "passport-naver-v2": "^2.0.8"
   },
   "devDependencies": {
     "nodemon": "^3.1.14",

@@ -5,6 +5,7 @@ import { bodyToStore } from "../dtos/store.dto.js";
 import { addMission, listStoreMissions } from "../services/mission.service.js";
 import { addReview, listStoreReviews } from "../services/review.service.js";
 import { addStore } from "../services/store.service.js";
+import { currentUserId } from "../auth.middleware.js";
 import { parseCursor, parseId } from "../utils/validation.js";
 
 // POST /regions/:regionId/stores
@@ -15,7 +16,9 @@ export const handleAddStore = async (req, res) => {
 
 // POST /reviews/:storeId
 export const handleAddReview = async (req, res) => {
-  const review = await addReview(bodyToReview(req.body, req.params.storeId));
+  const review = await addReview(
+    bodyToReview(req.body, req.params.storeId, currentUserId(req))
+  );
   res.status(StatusCodes.CREATED).success(review);
 };
 
